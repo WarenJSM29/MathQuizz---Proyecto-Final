@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'views/quiz_screen.dart';
+import 'views/home_screen.dart';
 
 void main() {
   runApp(const QuizApp());
@@ -11,13 +11,13 @@ class QuizApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quiz de Matemáticas',
+      title: 'Quizzes Educativos',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
         useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
       ),
-      home: QuizScreen(), // Aquí puedes cambiar luego a un HomeScreen
+      home: const HomeScreen(),
     );
   }
 }

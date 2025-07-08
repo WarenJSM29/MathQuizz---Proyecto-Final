@@ -1,0 +1,26 @@
+[
+  {
+    "question": "¿Cuánto es 5 + 3?",
+    "optionA": "6",
+    "optionB": "7",
+    "optionC": "8",
+    "optionD": "9",
+    "correctOption": "C"
+  },
+  {
+    "question": "¿Cuánto es 7 x 6?",
+    "optionA": "42",
+    "optionB": "36",
+    "optionC": "48",
+    "optionD": "40",
+    "correctOption": "A"
+  },
+  {
+    "question": "¿Cuánto es 100 ÷ 25?",
+    "optionA": "2",
+    "optionB": "4",
+    "optionC": "5",
+    "optionD": "10",
+    "correctOption": "C"
+  }
+]
