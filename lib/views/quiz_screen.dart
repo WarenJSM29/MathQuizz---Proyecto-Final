@@ -1,7 +1,7 @@
 import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
-import '../models/question.dart';
-import '../utils/question_generator.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -11,117 +11,146 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
-  final _generator = QuestionGenerator();
-  List<Question> _questions = [];
+  List<Map<String, dynamic>> _questions = [];
   int _currentIndex = 0;
   int _score = 0;
   bool _quizFinished = false;
-
-  int _secondsLeft = 10;
-  Timer? _timer;
-  Timer? _delayTimer;
-
   bool _answered = false;
   String? _selectedOption;
-
-  int _nextSecondsLeft = 5;
+  int _answerTimeLeft = 10;
+  int _nextQuestionTimeLeft = 5;
+  Timer? _answerTimer;
+  Timer? _nextTimer;
 
   @override
   void initState() {
     super.initState();
     _generateQuestions();
+    _startAnswerTimer();
   }
 
   void _generateQuestions() {
-    _questions = _generator.generateQuiz(15);
-    _currentIndex = 0;
-    _score = 0;
-    _quizFinished = false;
-    _answered = false;
-    _selectedOption = null;
-    _startTimer();
+    final random = Random();
+    final ops = ['+', '-', '×', '÷'];
+    _questions = List.generate(15, (_) {
+      final op = ops[random.nextInt(4)];
+      int a = random.nextInt(50) + 1;
+      int b = random.nextInt(50) + 1;
+
+      double correct;
+      switch (op) {
+        case '+':
+          correct = (a + b).toDouble();
+          break;
+        case '-':
+          correct = (a - b).toDouble();
+          break;
+        case '×':
+          correct = (a * b).toDouble();
+          break;
+        case '÷':
+          b = random.nextInt(9) + 1;
+          a = b * (random.nextInt(10) + 1);
+          correct = a / b;
+          break;
+        default:
+          correct = 0;
+      }
+
+      final correctStr = correct % 1 == 0 ? correct.toInt().toString() : correct.toStringAsFixed(2);
+      final correctIndex = random.nextInt(4);
+      final options = List.generate(4, (i) {
+        if (i == correctIndex) return correctStr;
+        int offset = random.nextInt(5) + 1;
+        return (correct + offset * (random.nextBool() ? 1 : -1)).round().toString();
+      });
+
+      return {
+        'question': '$a $op $b = ?',
+        'options': options,
+        'correct': correctStr,
+      };
+    });
   }
 
-  void _startTimer() {
-    _secondsLeft = 10;
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsLeft == 0) {
+  void _startAnswerTimer() {
+    _answerTimer?.cancel();
+    _answerTimeLeft = 10;
+
+    _answerTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_answerTimeLeft <= 1) {
         timer.cancel();
-        _handleTimeout();
+        _checkAnswer(null); // No respondió
       } else {
         setState(() {
-          _secondsLeft--;
+          _answerTimeLeft--;
         });
       }
     });
   }
 
-  void _handleTimeout() {
-    setState(() {
-      _answered = true;
-      _selectedOption = null;
-    });
-
-    _delayTimer = Timer(const Duration(seconds: 5), _goToNextQuestion);
-  }
-
-  void checkAnswer(String selectedOption) {
+  void _checkAnswer(String? option) {
     if (_answered) return;
 
-    _timer?.cancel();
-    final current = _questions[_currentIndex];
+    _answerTimer?.cancel();
+    _answered = true;
+    _selectedOption = option;
 
-    setState(() {
-      _answered = true;
-      _selectedOption = selectedOption;
-      _nextSecondsLeft = 5;
-    });
+    if (option != null && option == _questions[_currentIndex]['correct']) {
+      _score++;
+    }
 
-    _delayTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_nextSecondsLeft == 1) {
+    _nextTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_nextQuestionTimeLeft <= 1) {
         timer.cancel();
         _goToNextQuestion();
       } else {
         setState(() {
-          _nextSecondsLeft--;
+          _nextQuestionTimeLeft--;
         });
       }
     });
+
+    setState(() {});
   }
 
   void _goToNextQuestion() {
+    _nextTimer?.cancel();
     setState(() {
+      _answered = false;
+      _selectedOption = null;
+      _nextQuestionTimeLeft = 5;
+      _answerTimeLeft = 10;
+
       if (_currentIndex < _questions.length - 1) {
         _currentIndex++;
-        _answered = false;
-        _selectedOption = null;
-        _nextSecondsLeft = 5;
-        _startTimer();
+        _startAnswerTimer();
       } else {
         _quizFinished = true;
       }
     });
   }
 
-  void restartQuiz() {
-    _timer?.cancel();
-    _delayTimer?.cancel();
-    _generateQuestions();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _delayTimer?.cancel();
-    super.dispose();
+  void _restartQuiz() {
+    _answerTimer?.cancel();
+    _nextTimer?.cancel();
+    setState(() {
+      _score = 0;
+      _currentIndex = 0;
+      _quizFinished = false;
+      _answered = false;
+      _selectedOption = null;
+      _answerTimeLeft = 10;
+      _nextQuestionTimeLeft = 5;
+      _generateQuestions();
+      _startAnswerTimer();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_questions.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     if (_quizFinished) {
       return Scaffold(
@@ -130,121 +159,122 @@ class _QuizScreenState extends State<QuizScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                '¡Has terminado el quiz!',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              Icon(Icons.emoji_events, size: 80, color: colorScheme.primary),
               const SizedBox(height: 20),
               Text(
+                '¡Has terminado!',
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Text(
                 'Puntaje: $_score de ${_questions.length}',
-                style: const TextStyle(fontSize: 20),
+                style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: restartQuiz,
-                child: const Text('Reiniciar'),
-              ),
+              const SizedBox(height: 30),
+              ElevatedButton.icon(
+                onPressed: _restartQuiz,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reiniciar Quiz'),
+              )
             ],
           ),
         ),
       );
     }
 
-    final question = _questions[_currentIndex];
+    final current = _questions[_currentIndex];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Quiz de Matemáticas')),
+      appBar: AppBar(
+        title: const Text('Quiz de Matemáticas'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Pregunta ${_currentIndex + 1}/${_questions.length}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 10),
-
-            Text(
-              'Tiempo restante: $_secondsLeft s',
-              style: const TextStyle(fontSize: 16, color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 5),
-
+            // Barra de progreso
             LinearProgressIndicator(
-              value: _secondsLeft / 10,
-              color: Colors.red,
-              backgroundColor: Colors.grey[300],
-              minHeight: 10,
+              value: (_currentIndex + 1) / _questions.length,
+              backgroundColor: theme.dividerColor,
+              valueColor: AlwaysStoppedAnimation(colorScheme.primary),
             ),
-            const SizedBox(height: 30),
-
+            const SizedBox(height: 16),
             Text(
-              question.question,
-              style: const TextStyle(fontSize: 22),
-              textAlign: TextAlign.center,
+              'Pregunta ${_currentIndex + 1} de ${_questions.length}',
+              style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 8),
+            Text(
+              'Tiempo restante: $_answerTimeLeft segundos',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
+            ),
+            const SizedBox(height: 20),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  current['question'],
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ...List.generate(4, (i) {
+              final option = current['options'][i];
+              Color? bg;
 
-            ...['A', 'B', 'C', 'D'].map((label) {
-              String text = {
-                'A': question.optionA,
-                'B': question.optionB,
-                'C': question.optionC,
-                'D': question.optionD,
-              }[label]!;
-
-              Color? color;
               if (_answered) {
-                if (label == question.correctOption) {
-                  color = Colors.green;
-                } else if (label == _selectedOption) {
-                  color = Colors.red;
+                if (option == current['correct']) {
+                  bg = Colors.green;
+                } else if (option == _selectedOption) {
+                  bg = Colors.red;
+                } else {
+                  bg = theme.colorScheme.surface;
                 }
               }
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ElevatedButton(
-                  style: ButtonStyle(
-                    backgroundColor: MaterialStateProperty.resolveWith<Color?>((states) {
-                      if (_answered) {
-                        if (label == question.correctOption) return Colors.green;
-                        if (label == _selectedOption) return Colors.red;
-                      }
-                      return null; // usa color por defecto
-                    }),
-                    minimumSize: MaterialStateProperty.all(const Size(double.infinity, 50)),
+                  onPressed: () {
+                    if (!_answered) _checkAnswer(option);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: bg ?? theme.colorScheme.primaryContainer,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: bg ?? theme.disabledColor,
+                    disabledForegroundColor: Colors.white,
                   ),
-                  onPressed: _answered ? null : () => checkAnswer(label),
-                  child: Text('$label. $text', style: const TextStyle(fontSize: 18)),
+                  child: Text(option, style: const TextStyle(fontSize: 18)),
                 ),
               );
-            }).toList(),
-
+            }),
+            const Spacer(),
             if (_answered) ...[
-              const SizedBox(height: 20),
               Text(
-                'Siguiente pregunta en: $_nextSecondsLeft s',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-                textAlign: TextAlign.center,
+                'Siguiente pregunta en $_nextQuestionTimeLeft segundos...',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 10),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    _delayTimer?.cancel();
-                    _goToNextQuestion();
-                  },
-                  icon: const Icon(Icons.skip_next),
-                  label: const Text('Siguiente'),
-                ),
+              OutlinedButton.icon(
+                onPressed: _goToNextQuestion,
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Siguiente ahora'),
               ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _answerTimer?.cancel();
+    _nextTimer?.cancel();
+    super.dispose();
   }
 }
